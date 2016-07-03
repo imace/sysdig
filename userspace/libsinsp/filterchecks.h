@@ -17,6 +17,7 @@ along with sysdig.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #pragma once
+#include <unordered_set>
 #include <json/json.h>
 #include "k8s.h"
 #include "mesos.h"
@@ -40,6 +41,33 @@ public:
 	ppm_param_type m_type;
 	string m_name;
 	string m_description;
+};
+
+// Used for CO_IN filterchecks using PT_CHARBUFs to allow for
+// quick multi-value comparisons.
+
+// http://www.cse.yorku.ca/~oz/hash.html
+struct g_hash_charbuf
+{
+	size_t operator()(uint8_t *val) const
+	{
+		size_t hash = 5381;
+		int c;
+
+		while ((c = *val++))
+		{
+			hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
+		}
+		return hash;
+	}
+};
+
+struct g_equal_to_charbuf
+{
+	bool operator()(uint8_t *a, uint8_t *b) const
+	{
+		return (strcmp((const char *) a, (const char *) b) == 0);
+	}
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -148,6 +176,10 @@ protected:
 	vector<vector<uint8_t>> m_val_storages;
 	inline uint8_t* filter_value_p(uint16_t i = 0) { return &m_val_storages[i][0]; }
 	inline vector<uint8_t> filter_value(uint16_t i = 0) { return m_val_storages[i]; }
+
+	unordered_set<uint8_t *,
+		g_hash_charbuf,
+		g_equal_to_charbuf> m_val_storages_members;
 
 	const filtercheck_field_info* m_field;
 	filter_check_info m_info;
