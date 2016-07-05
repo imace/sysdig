@@ -43,30 +43,37 @@ public:
 	string m_description;
 };
 
-// Used for CO_IN filterchecks using PT_CHARBUFs to allow for
-// quick multi-value comparisons.
+// Used for CO_IN filterchecks using PT_CHARBUFs to allow for quick
+// multi-value comparisons. When compiling with gnu compilers, use the
+// built in but not standard _hash_impl::hash function, which uses
+// murmurhash2 and is quite fast. Otherwise, uses
+// http://www.cse.yorku.ca/~oz/hash.html.
 
-// http://www.cse.yorku.ca/~oz/hash.html
 struct g_hash_charbuf
 {
-	size_t operator()(uint8_t *val) const
+	size_t operator()(pair<uint8_t *, uint32_t> val) const
 	{
+#ifdef __GNUC__
+		return std::_Hash_impl::hash(val.first, val.second);
+#else
 		size_t hash = 5381;
 		int c;
+		uint8_t *p = val.first;
 
-		while ((c = *val++))
+		while ((c = *p++))
 		{
 			hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 		}
 		return hash;
+#endif
 	}
 };
 
 struct g_equal_to_charbuf
 {
-	bool operator()(uint8_t *a, uint8_t *b) const
+	bool operator()(pair<uint8_t *, uint32_t> a, pair<uint8_t *, uint32_t> b) const
 	{
-		return (strcmp((const char *) a, (const char *) b) == 0);
+		return (strcmp((const char *) a.first, (const char *) b.first) == 0);
 	}
 };
 
@@ -109,7 +116,7 @@ public:
 	// If this check is used by a filter, extract the constant to compare it to
 	// Doesn't return the field length because the filtering engine can calculate it.
 	//
-	void add_filter_value(const char* str, uint32_t len, uint16_t i = 0 );
+	void add_filter_value(const char* str, uint32_t len);
 	virtual void parse_filter_value(const char* str, uint32_t len, uint8_t *storage, uint32_t storage_len);
 
 	//
@@ -177,7 +184,7 @@ protected:
 	inline uint8_t* filter_value_p(uint16_t i = 0) { return &m_val_storages[i][0]; }
 	inline vector<uint8_t> filter_value(uint16_t i = 0) { return m_val_storages[i]; }
 
-	unordered_set<uint8_t *,
+	unordered_set<pair<uint8_t *, uint32_t>,
 		g_hash_charbuf,
 		g_equal_to_charbuf> m_val_storages_members;
 

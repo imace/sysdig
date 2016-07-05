@@ -953,19 +953,16 @@ int32_t sinsp_filter_check::get_check_id()
 }
 
 
-void sinsp_filter_check::add_filter_value(const char* str, uint32_t len, uint16_t i)
+void sinsp_filter_check::add_filter_value(const char* str, uint32_t len)
 {
+	m_val_storages.push_back(vector<uint8_t>(256));
 
-	if (i >= m_val_storages.size())
-	{
-		m_val_storages.push_back(vector<uint8_t>(256));
-	}
+	uint16_t i = m_val_storages.size()-1;
 
 	parse_filter_value(str, len, filter_value_p(i), filter_value(i).size());
 
-	// XXX/mstemm this doesn't work if someone called
-	// add_filter_value more than once for a given index.
-	m_val_storages_members.insert(filter_value_p(i));
+	pair<uint8_t *, uint32_t> item(filter_value_p(i), len);
+	m_val_storages_members.insert(item);
 }
 
 
@@ -1003,7 +1000,8 @@ bool sinsp_filter_check::flt_compare(cmpop op, ppm_param_type type, void* operan
 			throw sinsp_exception("filter error: cannot use 'in' operator with param type "+ to_string(type));
 		}
 
-		if(m_val_storages_members.find((uint8_t *) operand1) != m_val_storages_members.end())
+		pair<uint8_t *, uint32_t> item((uint8_t *) operand1, op1_len);
+		if(m_val_storages_members.find(item) != m_val_storages_members.end())
 		{
 			return true;
 		}
@@ -1590,14 +1588,12 @@ void sinsp_filter_compiler::parse_check()
 			//
 			// Create the 'or' sequence
 			//
-			uint64_t num_values = 0;
 			while(true)
 			{
 				// 'in' clause aware
 				vector<char> operand2 = next_operand(false, true);
 
-				chk->add_filter_value((char *)&operand2[0], (uint32_t)operand2.size() - 1, num_values);
-				num_values++;
+				chk->add_filter_value((char *)&operand2[0], (uint32_t)operand2.size() - 1);
 				next();
 
 				if(m_fltstr[m_scanpos] == ')')
