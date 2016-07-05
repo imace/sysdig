@@ -225,7 +225,7 @@ int lua_parser_cbacks::rel_expr(lua_State *ls)
 				{
 					lua_rawgeti(ls, 3, i);
 					const char* value = luaL_checkstring(ls, 5);
-					chk->add_filter_value(value, strlen(value), i - 1);
+					chk->add_filter_value(value, strlen(value));
 					lua_pop(ls, 1);
 				}
 			}
