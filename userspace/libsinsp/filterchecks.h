@@ -44,12 +44,13 @@ public:
 };
 
 // Used for CO_IN filterchecks using PT_CHARBUFs to allow for quick
-// multi-value comparisons. When compiling with gnu compilers, use the
+// multi-value comparisons. Should also work for any filtercheck with
+// a buffer and length. When compiling with gnu compilers, use the
 // built in but not standard _hash_impl::hash function, which uses
 // murmurhash2 and is quite fast. Otherwise, uses
 // http://www.cse.yorku.ca/~oz/hash.html.
 
-struct g_hash_charbuf
+struct g_hash_membuf
 {
 	size_t operator()(pair<uint8_t *, uint32_t> val) const
 	{
@@ -57,11 +58,10 @@ struct g_hash_charbuf
 		return std::_Hash_impl::hash(val.first, val.second);
 #else
 		size_t hash = 5381;
-		int c;
-		uint8_t *p = val.first;
-
-		while ((c = *p++))
+		for(uint8_t *p = val.first; p-val.first < val.second; p++)
 		{
+			int c = *p;
+
 			hash = ((hash << 5) + hash) + c; /* hash * 33 + c */
 		}
 		return hash;
@@ -69,11 +69,12 @@ struct g_hash_charbuf
 	}
 };
 
-struct g_equal_to_charbuf
+struct g_equal_to_membuf
 {
 	bool operator()(pair<uint8_t *, uint32_t> a, pair<uint8_t *, uint32_t> b) const
 	{
-		return (strcmp((const char *) a.first, (const char *) b.first) == 0);
+		return (a.second == b.second &&
+			memcmp(a.first, b.first, a.second) == 0);
 	}
 };
 
@@ -116,7 +117,7 @@ public:
 	// If this check is used by a filter, extract the constant to compare it to
 	// Doesn't return the field length because the filtering engine can calculate it.
 	//
-	void add_filter_value(const char* str, uint32_t len);
+	void add_filter_value(const char* str, uint32_t len, uint16_t i = 0 );
 	virtual void parse_filter_value(const char* str, uint32_t len, uint8_t *storage, uint32_t storage_len);
 
 	//
@@ -172,6 +173,10 @@ public:
 	sinsp_field_aggregation m_aggregation;
 	sinsp_field_aggregation m_merge_aggregation;
 
+	unordered_set<pair<uint8_t *, uint32_t>,
+		g_hash_membuf,
+		g_equal_to_membuf> m_val_storages_members;
+
 protected:
 	bool flt_compare(cmpop op, ppm_param_type type, void* operand1, uint32_t op1_len = 0, uint32_t op2_len = 0);
 
@@ -184,9 +189,8 @@ protected:
 	inline uint8_t* filter_value_p(uint16_t i = 0) { return &m_val_storages[i][0]; }
 	inline vector<uint8_t> filter_value(uint16_t i = 0) { return m_val_storages[i]; }
 
-	unordered_set<pair<uint8_t *, uint32_t>,
-		g_hash_charbuf,
-		g_equal_to_charbuf> m_val_storages_members;
+	uint32_t m_val_storages_min_size;
+	uint32_t m_val_storages_max_size;
 
 	const filtercheck_field_info* m_field;
 	filter_check_info m_info;
